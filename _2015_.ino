@@ -1,8 +1,15 @@
 #include <GC5883.h>
-
 #include <DueTimer.h>
-#include <LiquidCrystal_I2C.h>
-
+/*
+ライン
+0反応なし
+1左
+2右
+3後
+4左と右
+5左と後ろ
+6右と後ろ
+*/
 #include <mymath.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -15,16 +22,25 @@
 #define InA2 28
 #define InB2 29
 #define PWM2 5
-#define SSIR 53
-#define SSUS 52
+#define SSIR 53//spi赤外せん
+#define SSUS 52//spi超音波
+#define SSLN 51//spiライン
+#define INTRPT 42//ライン割り込み(Interruptの略)
 #define KU 1
 #define TU 4.5
 int compassAddress = 0x42 >> 1; 
 int e=0,e1=0,in=0,head1;
 double mani=0,kd=TU,kp=KU;
 GC5883 compass;
-LiquidCrystal_I2C lcd(0x27,16,2);
 mymath f;
+//------------------------------------------------
+int lineRead(){
+  int line;
+  digitalWrite(SSLN,LOW);
+  line=SPI.transfer(17);
+  digitalWrite(SSLN,HIGH);
+  return line;
+}
 int dirRead(){
   int dir;
   digitalWrite(SSIR,LOW);
@@ -105,6 +121,7 @@ void timerHandler() {
   mani=0.6*kp*e+0*in+0.125*TU*(e-e1);
   // 割り込み発生時に実行する部分
 }
+//------------------------------------------------
 void setup() {
   pinMode(InA0, OUTPUT);
   pinMode(InB0, OUTPUT);
@@ -129,8 +146,10 @@ void setup() {
   Serial.begin(9600);
   pinMode(SSIR,OUTPUT);
   pinMode(SSUS,OUTPUT);
+  pinMode(SSLN,OUTPUT);
+  digitalWrite(SSIR,HIGH);
   digitalWrite(SSUS,HIGH);
-  lcd.init();
+  digitalWrite(SSLN,HIGH);
   compass.init();
   head1=(int)compass;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
@@ -139,6 +158,28 @@ void loop() {
   int dir;
   double m0=0, m1=0, m2=0;
   dir=dirRead();
+  switch(lineRead()){
+    case 0:
+      break;
+    case 1:
+      dir = 330;
+      break;
+    case 2:
+      dir = 210;
+      break;
+    case 3:
+      dir = 90;
+      break;
+    case 4:
+      dir = 270;
+      break;
+    case 5:
+      dir = 30;
+      break;
+    case 6:
+      dir = 150;
+      break;
+  }
   dir2out(dir,64,&m0,&m1,&m2);
     m0 += mani;
     m1 += mani;
@@ -153,10 +194,4 @@ void loop() {
   }else{
     moveMotor(m0, m1, m2);
   }
-//  lcd.backlight();
-//lcd.setCursor(2,0); //Start at character 2 on line 0
-//  lcd.print("123456789");
-//  lcd.clear();
-//  lcd.setCursor(3,1);
-//  lcd.print(dir);
 }
