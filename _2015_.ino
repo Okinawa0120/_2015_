@@ -5,8 +5,8 @@
 0反応なし
 1左
 2右
-3後
-4左と右
+3左と右
+4後ろ
 5左と後ろ
 6右と後ろ
 */
@@ -28,30 +28,30 @@
 #define INTRPT 42//ライン割り込み(Interruptの略)
 #define KU 1
 #define TU 4.5
-int compassAddress = 0x42 >> 1; 
-int e=0,e1=0,in=0,head1;
-double mani=0,kd=TU,kp=KU;
+int compassAddress = 0x42 >> 1;
+int e = 0, e1 = 0, in = 0, head1;
+double mani = 0, kd = TU, kp = KU;
 GC5883 compass;
 mymath f;
 //------------------------------------------------
-int lineRead(){
+int lineRead() {
   int line;
-  digitalWrite(SSLN,LOW);
-  line=SPI.transfer(17);
-  digitalWrite(SSLN,HIGH);
+  digitalWrite(SSLN, LOW);
+  line = SPI.transfer(17);
+  digitalWrite(SSLN, HIGH);
   return line;
 }
-int dirRead(){
+int dirRead() {
   int dir;
-  digitalWrite(SSIR,LOW);
-  dir=SPI.transfer(9);
-  
-  digitalWrite(SSIR,HIGH);
-  if(dir==255){
+  digitalWrite(SSIR, LOW);
+  dir = SPI.transfer(9);
+
+  digitalWrite(SSIR, HIGH);
+  if (dir == 255) {
     return 360;
   }
-  dir*=10;
-  dir/=7;
+  dir *= 10;
+  dir /= 7;
   return dir;
 }
 void dir2out(int dir, int pwm, double *Mo0, double *Mo1, double *Mo2) {
@@ -100,25 +100,25 @@ void moveMotor(double Mo0, double Mo1, double Mo2) {
   }
 }
 void timerHandler() {
-  e1=e;
+  e1 = e;
   Serial.println("timer");
   compass.init();
-  e=head1-(int)compass;
-  if(e>180){
-    e-=360;
+  e = head1 - (int)compass;
+  if (e > 180) {
+    e -= 360;
   }
-  if(e<-180){
-    e+=360;
+  if (e < -180) {
+    e += 360;
   }
-  in+=e+e1;
-  if((e>-40)&&(e<40)){
-    kd=TU;
-    kp=KU+0.8;
-  }else{
-    kd=TU;
-    kp=KU;
+  in += e + e1;
+  if ((e > -40) && (e < 40)) {
+    kd = TU;
+    kp = KU + 0.8;
+  } else {
+    kd = TU;
+    kp = KU;
   }
-  mani=0.6*kp*e+0*in+0.125*TU*(e-e1);
+  mani = 0.6 * kp * e + 0 * in + 0.125 * TU * (e - e1);
   // 割り込み発生時に実行する部分
 }
 //------------------------------------------------
@@ -138,29 +138,27 @@ void setup() {
   digitalWrite(InB1, HIGH);
   digitalWrite(InA2, HIGH);
   digitalWrite(InB2, HIGH);
-  
+
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
   SPI.setClockDivider(16);
   SPI.setDataMode(SPI_MODE0);
   Serial.begin(9600);
-  pinMode(SSIR,OUTPUT);
-  pinMode(SSUS,OUTPUT);
-  pinMode(SSLN,OUTPUT);
-  digitalWrite(SSIR,HIGH);
-  digitalWrite(SSUS,HIGH);
-  digitalWrite(SSLN,HIGH);
+  pinMode(SSIR, OUTPUT);
+  pinMode(SSUS, OUTPUT);
+  pinMode(SSLN, OUTPUT);
+  digitalWrite(SSIR, HIGH);
+  digitalWrite(SSUS, HIGH);
+  digitalWrite(SSLN, HIGH);
   compass.init();
-  head1=(int)compass;
+  head1 = (int)compass;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
 }
 void loop() {
   int dir;
-  double m0=0, m1=0, m2=0;
-  dir=dirRead();
-  switch(lineRead()){
-    case 0:
-      break;
+  double m0 = 0, m1 = 0, m2 = 0;
+  dir = dirRead();
+  switch (lineRead()) {
     case 1:
       dir = 330;
       break;
@@ -168,10 +166,10 @@ void loop() {
       dir = 210;
       break;
     case 3:
-      dir = 90;
+      dir = 270;
       break;
     case 4:
-      dir = 270;
+      dir = 90;
       break;
     case 5:
       dir = 30;
@@ -179,19 +177,21 @@ void loop() {
     case 6:
       dir = 150;
       break;
+    default:
+      break;
   }
-  dir2out(dir,64,&m0,&m1,&m2);
-    m0 += mani;
-    m1 += mani;
-    m2 += mani;
-  if((dir==360)||(digitalRead(50)==LOW)){
+  dir2out(dir, 64, &m0, &m1, &m2);
+  m0 += mani;
+  m1 += mani;
+  m2 += mani;
+  if ((dir == 360) || (digitalRead(50) == LOW)) {
     digitalWrite(InA0, LOW);
     digitalWrite(InB0, LOW);
     digitalWrite(InA1, LOW);
     digitalWrite(InB1, LOW);
     digitalWrite(InA2, LOW);
     digitalWrite(InB2, LOW);
-  }else{
+  } else {
     moveMotor(m0, m1, m2);
   }
 }
