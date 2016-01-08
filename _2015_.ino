@@ -24,10 +24,12 @@
 #define PWM2 5
 #define SSIR 53//spi赤外せん
 #define SSUS 52//spi超音波
-#define SSLN 51//spiライン
+#define SSLN 43//spiライン
 #define INTRPT 42//ライン割り込み(Interruptの略)
 #define KU 1
 #define TU 4.5
+#define SWR 51
+#define SWL 50
 int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, in = 0, head1;
 double mani = 0, kd = TU, kp = KU;
@@ -101,7 +103,6 @@ void moveMotor(double Mo0, double Mo1, double Mo2) {
 }
 void timerHandler() {
   e1 = e;
-  Serial.println("timer");
   compass.init();
   e = head1 - (int)compass;
   if (e > 180) {
@@ -132,6 +133,8 @@ void setup() {
   pinMode(InA2, OUTPUT);
   pinMode(InB2, OUTPUT);
   pinMode(PWM2, OUTPUT);
+  pinMode(SWR, INPUT);
+  pinMode(SWL, INPUT);
   digitalWrite(InA0, HIGH);
   digitalWrite(InB0, HIGH);
   digitalWrite(InA1, HIGH);
@@ -155,36 +158,39 @@ void setup() {
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
 }
 void loop() {
+  digitalWrite(SSLN, HIGH);
+  digitalWrite(SSIR, HIGH);
+  digitalWrite(SSUS, HIGH);
   int dir;
   double m0 = 0, m1 = 0, m2 = 0;
   dir = dirRead();
+  Serial.print(dir);
+  Serial.print(" ");
+  Serial.println(lineRead());
   switch (lineRead()) {
-    case 1:
-      dir = 330;
-      break;
-    case 2:
-      dir = 210;
-      break;
-    case 3:
-      dir = 270;
-      break;
-    case 4:
-      dir = 90;
-      break;
-    case 5:
-      dir = 30;
-      break;
-    case 6:
-      dir = 150;
-      break;
-    default:
-      break;
-  }
-  dir2out(dir, 64, &m0, &m1, &m2);
-  m0 += mani;
-  m1 += mani;
-  m2 += mani;
-  if ((dir == 360) || (digitalRead(50) == LOW)) {
+      case 1:
+        dir = 330;
+        break;
+      case 2:
+        dir = 210;
+        break;
+      case 3:
+        dir = 270;
+        break;
+      case 4:
+        dir = 90;
+        break;
+      case 5:
+        dir = 30;
+        break;
+      case 6:
+        dir = 150;
+        break;
+      default:
+        break;
+    }
+  //  
+  if ((dir == 360)||(digitalRead(SWR)==LOW)) {
     digitalWrite(InA0, LOW);
     digitalWrite(InB0, LOW);
     digitalWrite(InA1, LOW);
@@ -192,6 +198,10 @@ void loop() {
     digitalWrite(InA2, LOW);
     digitalWrite(InB2, LOW);
   } else {
+    dir2out(dir, 90, &m0, &m1, &m2);
+    m0 += mani;
+    m1 += mani;
+    m2 += mani;
     moveMotor(m0, m1, m2);
   }
 }
