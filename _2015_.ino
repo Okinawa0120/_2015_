@@ -45,14 +45,7 @@ GC5883 compass;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 mymath f;
 //------------------------------------------------
-int distRead(int dir){
-  /*
-  dirはそれぞれ
-  1正面
-  2右
-  3後ろ
-  4左
-  */
+int posiRead(int dir){
   int recvd=0;
 //  digitalWrite(SSUS, LOW);
 //  recvd = SPI.transfer(dir);
@@ -124,6 +117,14 @@ void moveMotor(double Mo0, double Mo1, double Mo2) {
     digitalWrite(InB2, HIGH);
     analogWrite(PWM2, Mo2);
   }
+}
+void stopMoter(){
+    digitalWrite(InA0, LOW);
+    digitalWrite(InB0, LOW);
+    digitalWrite(InA1, LOW);
+    digitalWrite(InB1, LOW);
+    digitalWrite(InA2, LOW);
+    digitalWrite(InB2, LOW);
 }
 void timerHandler() {
   e1 = e;
@@ -210,38 +211,12 @@ void loop() {
   double m0 = 0, m1 = 0, m2 = 0;
   dir = dirRead();
   Serial.print(dir);
-  Serial.println(" ");
-  Serial.println(lineRead());
-  switch (lineRead()) {
-    case 1:
-      dir = 330;
-      break;
-    case 2:
-      dir = 210;
-      break;
-    case 3:
-      dir = 270;
-      break;
-    case 4:
-      dir = 90;
-      break;
-    case 5:
-      dir = 30;
-      break;
-    case 6:
-      dir = 150;
-      break;
-    default:
-      break;
-  }
-  if ((digitalRead(SWR) == LOW)) {
+  Serial.print(" ");
+  int line = lineRead();
+  Serial.println(line);
+  if (digitalRead(SWR) == LOW) {
     Timer3.stop();
-    digitalWrite(InA0, LOW);
-    digitalWrite(InB0, LOW);
-    digitalWrite(InA1, LOW);
-    digitalWrite(InB1, LOW);
-    digitalWrite(InA2, LOW);
-    digitalWrite(InB2, LOW);
+    stopMoter();
     switch (mode) {
       case 0:
 //      int line = lineRead();
@@ -252,34 +227,34 @@ void loop() {
         lcd.print(lineRead());
         break;
       case 1:
-//      int dist = distRead(2);
+//      int posi = posiRead(2);
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
         lcd.print("Right");
         lcd.setCursor(3, 1);
-//        lcd.print(dist);
+//        lcd.print(posi);
         lcd.print("cm");
         break;
       case 2:
-//      int dist = distRead(4);
+//      int posi = posiRead(4);
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
         lcd.print("Left");
         lcd.setCursor(3, 1);
-        lcd.print(distRead(4));
+        lcd.print(posiRead(4));
         lcd.print("cm");
         lcd.setCursor(7, 1);
         break;
       case 3:
-//      int dist = distRead(2);
+//      int posi = posiRead(2);
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
         lcd.print("Back");
         lcd.setCursor(3, 1);
-        lcd.print(distRead(3));
+        lcd.print(posiRead(3));
         lcd.print("cm");
         break;
       case 4:
@@ -303,7 +278,31 @@ void loop() {
         break;
     }
     delay(50);
-  } else {
+  } else if(dir==360){
+    stopMoter();
+  }else{
+    switch (line) {
+    case 1:
+      dir = 330;
+      break;
+    case 2:
+      dir = 210;
+      break;
+    case 3:
+      dir = 270;
+      break;
+    case 4:
+      dir = 90;
+      break;
+    case 5:
+      dir = 30;
+      break;
+    case 6:
+      dir = 150;
+      break;
+    default:
+      break;
+  }
     dir2out(dir, 90, &m0, &m1, &m2);
     m0 += mani;
     m1 += mani;
