@@ -35,7 +35,7 @@
 #define BT1 44//UI用のスイッチ
 #define BT2 45//UI用のスイッチ
 #define BT3 46//UI用のスイッチ
-#define NOM 6 //Number Of Modesの頭文字,モードが何個あるか
+#define NOM 4 //Number Of Modesの頭文字,モードが何個あるか
 
 int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, head1;
@@ -45,12 +45,11 @@ GC5883 compass;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 mymath f;
 //------------------------------------------------
-int posiRead(int dir){
-  int recvd=0;
-//  digitalWrite(SSUS, LOW);
-//  recvd = SPI.transfer(dir);
-//  recvd = SPI.transfer(17);//()の中の数に意味はない
-//  digitalWrite(SSUS, HIGH);
+int posiRead() {
+  int recvd = 0;
+  digitalWrite(SSUS, LOW);
+  recvd = SPI.transfer(17);//()の中の数に意味はない
+  digitalWrite(SSUS, HIGH);
   return recvd;
 }
 int lineRead() {
@@ -118,13 +117,13 @@ void moveMotor(double Mo0, double Mo1, double Mo2) {
     analogWrite(PWM2, Mo2);
   }
 }
-void stopMoter(){
-    digitalWrite(InA0, LOW);
-    digitalWrite(InB0, LOW);
-    digitalWrite(InA1, LOW);
-    digitalWrite(InB1, LOW);
-    digitalWrite(InA2, LOW);
-    digitalWrite(InB2, LOW);
+void stopMoter() {
+  digitalWrite(InA0, LOW);
+  digitalWrite(InB0, LOW);
+  digitalWrite(InA1, LOW);
+  digitalWrite(InB1, LOW);
+  digitalWrite(InA2, LOW);
+  digitalWrite(InB2, LOW);
 }
 void timerHandler() {
   e1 = e;
@@ -146,19 +145,19 @@ void timerHandler() {
   mani = 0.6 * kp * e + 0.125 * TU * (e - e1);
   // 割り込み発生時に実行する部分
 }
-void increase(){
+void increase() {
   mode += 1;
-  if(mode>=NOM){
+  if (mode >= NOM) {
     mode = 0;
   }
 }
-void decrease(){
+void decrease() {
   mode -= 1;
-  if(mode<0){
+  if (mode < 0) {
     mode = NOM;
   }
 }
-void startTimer(){
+void startTimer() {
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
 }
 //------------------------------------------------
@@ -183,7 +182,7 @@ void setup() {
 
   lcd.init();
   lcd.backlight();
-  
+
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
   SPI.setClockDivider(16);
@@ -214,12 +213,15 @@ void loop() {
   Serial.print(" ");
   int line = lineRead();
   Serial.println(line);
+  int x;
+  int y = posiRead()%128;
+  x = y % 8;
+  y /= 8;
   if (digitalRead(SWR) == LOW) {
     Timer3.stop();
     stopMoter();
     switch (mode) {
       case 0:
-//      int line = lineRead();
         lcd.clear();
         lcd.setCursor(2, 0);
         lcd.print("Line");
@@ -227,37 +229,18 @@ void loop() {
         lcd.print(lineRead());
         break;
       case 1:
-//      int posi = posiRead(2);
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
-        lcd.print("Right");
+        lcd.print("Position");
         lcd.setCursor(3, 1);
-//        lcd.print(posi);
-        lcd.print("cm");
+        lcd.print("x:");
+        lcd.print(x);
+        lcd.setCursor(8, 1);
+        lcd.print("y:");
+        lcd.print(y);
         break;
       case 2:
-//      int posi = posiRead(4);
-        lcd.clear();
-        lcd.backlight();
-        lcd.setCursor(2, 0);
-        lcd.print("Left");
-        lcd.setCursor(3, 1);
-        lcd.print(posiRead(4));
-        lcd.print("cm");
-        lcd.setCursor(7, 1);
-        break;
-      case 3:
-//      int posi = posiRead(2);
-        lcd.clear();
-        lcd.backlight();
-        lcd.setCursor(2, 0);
-        lcd.print("Back");
-        lcd.setCursor(3, 1);
-        lcd.print(posiRead(3));
-        lcd.print("cm");
-        break;
-      case 4:
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
@@ -268,7 +251,7 @@ void loop() {
         lcd.print(head1);
         lcd.print("deg");
         break;
-      case 5:
+      case 3:
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
@@ -277,32 +260,32 @@ void loop() {
         lcd.print(dirRead());
         break;
     }
-    delay(50);
-  } else if(dir==360){
+    delay(100);
+  } else if (dir == 360) {
     stopMoter();
-  }else{
+  } else {
     switch (line) {
-    case 1:
-      dir = 330;
-      break;
-    case 2:
-      dir = 210;
-      break;
-    case 3:
-      dir = 270;
-      break;
-    case 4:
-      dir = 90;
-      break;
-    case 5:
-      dir = 30;
-      break;
-    case 6:
-      dir = 150;
-      break;
-    default:
-      break;
-  }
+      case 1:
+        dir = 330;
+        break;
+      case 2:
+        dir = 210;
+        break;
+      case 3:
+        dir = 270;
+        break;
+      case 4:
+        dir = 90;
+        break;
+      case 5:
+        dir = 30;
+        break;
+      case 6:
+        dir = 150;
+        break;
+      default:
+        break;
+    }
     dir2out(dir, 90, &m0, &m1, &m2);
     m0 += mani;
     m1 += mani;
