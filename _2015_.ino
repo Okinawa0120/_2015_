@@ -15,15 +15,18 @@
 6右と後ろ
 */
 //ピン番号
-#define InA0 24//モタドラ
-#define InB0 25//モタドラ
-#define PWM0 3//モタドラ
-#define InA1 23//モタドラ
-#define InB1 22//モタドラ
-#define PWM1 2//モタドラ
-#define InA2 28//モタドラ
-#define InB2 29//モタドラ
-#define PWM2 5//モタドラ
+#define InA0 24//移動用モーター
+#define InB0 25//移動用モーター
+#define PWM0 3//移動用モーター
+#define InA1 23//移動用モーター
+#define InB1 22//移動用モーター
+#define PWM1 2//移動用モーター
+#define InA2 28//移動用モーター
+#define InB2 29//移動用モーター
+#define PWM2 5//移動用モーター
+#define InAD 26//ドリブラー
+#define InBD 27//ドリブラー
+#define PWMD 4//ドリブラー
 #define SSIR 53//赤外線センサを読むマイコンのSSピン
 #define SSUS 52//超音波センサを読むマイコンのSSピン
 #define SSLN 43//ラインセンサを読むマイコンのSSピン
@@ -56,12 +59,11 @@ int lineRead() {
   digitalWrite(SSLN, HIGH);
   return recvd;
 }
-int irRead() {
+int irRead(int send) {
   //irセンサを読むマイコンから進行方向を受け取る
   int recvd;
   digitalWrite(SSIR, LOW);
-  recvd = SPI.transfer(0);//()の中の数に意味はない
-
+  recvd = SPI.transfer(1);
   digitalWrite(SSIR, HIGH);
   if (recvd == 255) {
     return 360;
@@ -127,6 +129,16 @@ void stop() {
   digitalWrite(InA2, LOW);
   digitalWrite(InB2, LOW);
 }
+void dribble(int judg){
+  if(judg==0){
+    digitalWrite(InAD, HIGH);
+    digitalWrite(InBD, LOW);
+    analogWrite(PWMD, 50);
+  }else{
+    digitalWrite(InAD, LOW);
+  digitalWrite(InBD, LOW);
+  }
+}
 
 int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, front;
@@ -170,6 +182,14 @@ void startTimer() {
   //スイッチ入力でタイマー割り込みを再開させるための関数
   e=(int)compass;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
+}
+int role;//ロボットのオフェンス,ディフェンスを表す変数
+void change(){
+  if(digitalRead(SWL)==LOW){
+    role = 0;//オフェンス
+  }else{
+    role = 1;//ディフェンス
+  }
 }
 //------------------------------------------------
 LiquidCrystal_I2C lcd(0x27,16,2);
@@ -216,6 +236,7 @@ void setup() {
   attachInterrupt(BT1, increase, RISING);
   attachInterrupt(BT3, decrease, RISING);
   attachInterrupt(SWR, startTimer, RISING);
+  attachInterrupt(SWL, change, CHANGE);
 }
 int interval=0;
 void loop() {
@@ -226,7 +247,7 @@ void loop() {
   digitalWrite(KICKER,LOW);
   //変数の初期化
   double m0 = 0, m1 = 0, m2 = 0;
-  int dir = irRead();
+  int dir = irRead(role);
   int line = lineRead();
   int y = posiRead()%128;
   int x = y % 8;
@@ -275,12 +296,31 @@ void loop() {
         lcd.setCursor(2, 0);
         lcd.print("Direction");
         lcd.setCursor(3, 1);
-        lcd.print(irRead());
+        lcd.print(irRead(role));
         break;
     }
     delay(100);
   } else if (dir == 360) {//ボールがコートから出された場合
-    move(mani, mani, mani);//その場で相手ゴール側に向く
+    if((posiRead()/128==1)||(role==0)){//ゴール前にいるかオフェンスの時
+      move(mani, mani, mani);//その場で相手ゴール側に向く
+    }else{
+    //ゴール前に戻る
+      if(x%4>1){//正面にゴールがあれば
+        dir = 270;
+      }else{
+        if(x/4==0){//コートの右半分にいれば
+          dir = 180;
+        }else{
+          dir = 0;
+        }
+      }
+    dir2out(dir, 90, &m0, &m1, &m2);//進行方向からモタドラへの出力を決める
+    //モタドラへの出力にpd制御の操作量を加える
+    m0 += mani;
+    m1 += mani;
+    m2 += mani;
+    move(m0, m1, m2);//モーターを動かす
+    }
   } else {
     switch (line) {
       //ラインセンサに反応があれば進行方向を変える
@@ -306,7 +346,7 @@ void loop() {
         break;
     }
     int pwm = 90;
-    if(x%4>1){
+    if(x%4>1){//正面にゴールがあれば
       if((digitalRead(BALL)==LOW)&&(interval-millis()>500)){
       //キッカーがボールに届き,かつ充電が終わっていればキッカーを動かす
         digitalWrite(KICKER,HIGH);
@@ -328,4 +368,10 @@ void loop() {
     m2 += mani;
     move(m0, m1, m2);//モーターを動かす
   }
+  
+    if(dir==90){//ボールが正面にあればドリブラーを回す
+      dribble(0);
+    }else{
+      dribble(1);
+    }
 }
