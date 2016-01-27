@@ -31,7 +31,7 @@
 #define SSUS 52//超音波センサを読むマイコンのSSピン
 #define SSLN 43//ラインセンサを読むマイコンのSSピン
 #define INTRPT 42//ライン割り込み(Interruptの略)
-#define KICKER 40//ソレノイドを制御する電磁リレー
+#define KICKER 41//ソレノイドを制御する電磁リレー
 #define SWR 50//UI用のスイッチ
 #define SWL 51//UI用のスイッチ
 #define BT1 44//UI用のスイッチ
@@ -41,7 +41,7 @@
 //ピン番号以外のマクロ
 #define KU 1//pidのパラメータ
 #define TU 4.5//pidのパラメータ
-#define NOM 4 //Number Of Modesの頭文字,モードの数
+#define NOM 5 //Number Of Modesの頭文字,モードの数
 //------------------------------------------------
 int posiRead() {
   //超音波センサを読むマイコンからロボットがどの区分にいるかを受け取る
@@ -65,6 +65,10 @@ int irRead(int send) {
   digitalWrite(SSIR, LOW);
   recvd = SPI.transfer(1);
   digitalWrite(SSIR, HIGH);
+  if (recvd == 254) {
+    Serial.println("wwwwwwwwwwwww");
+    return 360;
+  }
   if (recvd == 255) {
     return 360;
   }
@@ -82,7 +86,7 @@ void dir2out(int dir, int pwm, double *m0, double *m1, double *m2) {
   *m1 = -1 * x;
   *m2 = x * f.mycos(60) + y * f.mysin(60);
 }
-void move(double m0, double m1, double m2){
+void move(double m0, double m1, double m2) {
   //移動用モーターを動かす
   if (m0 > 0) {
     digitalWrite(InA0, HIGH);
@@ -129,14 +133,14 @@ void stop() {
   digitalWrite(InA2, LOW);
   digitalWrite(InB2, LOW);
 }
-void dribble(int judg){
-  if(judg==0){
+void dribble(int judg) {
+  if (judg == 0) {
     digitalWrite(InAD, HIGH);
     digitalWrite(InBD, LOW);
     analogWrite(PWMD, 50);
-  }else{
+  } else {
     digitalWrite(InAD, LOW);
-  digitalWrite(InBD, LOW);
+    digitalWrite(InBD, LOW);
   }
 }
 
@@ -145,7 +149,7 @@ int e = 0, e1 = 0, front;
 double mani = 0, kp = KU;
 GC5883 compass;
 void timerHandler() {
-//相手ゴール側に向くためのpd制御
+  //相手ゴール側に向くためのpd制御
   e1 = e;
   compass.init();
   e = front - (int)compass;
@@ -180,21 +184,21 @@ void decrease() {
 }
 void startTimer() {
   //スイッチ入力でタイマー割り込みを再開させるための関数
-  e=(int)compass;
+  e = (int)compass;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
 }
-int role;//ロボットのオフェンス,ディフェンスを表す変数
-void change(){
-  if(digitalRead(SWL)==LOW){
+int role = digitalRead(SWL); //ロボットのオフェンス,ディフェンスを表す変数
+void change() {
+  if (digitalRead(SWL) == LOW) {
     role = 0;//オフェンス
-  }else{
+  } else {
     role = 1;//ディフェンス
   }
 }
 //------------------------------------------------
-LiquidCrystal_I2C lcd(0x27,16,2);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 void setup() {
-//ioピンの設定
+  //ioピンの設定
   pinMode(InA0, OUTPUT);
   pinMode(InB0, OUTPUT);
   pinMode(PWM0, OUTPUT);
@@ -206,16 +210,18 @@ void setup() {
   pinMode(PWM2, OUTPUT);
   pinMode(SWR, INPUT);
   pinMode(SWL, INPUT);
+  pinMode(BALL, INPUT);
+  pinMode(KICKER, OUTPUT);
   digitalWrite(InA0, HIGH);
   digitalWrite(InB0, HIGH);
   digitalWrite(InA1, HIGH);
   digitalWrite(InB1, HIGH);
   digitalWrite(InA2, HIGH);
   digitalWrite(InB2, HIGH);
-//lcdの設定
+  //lcdの設定
   lcd.init();
   lcd.backlight();
-//SPI通信の設定
+  //SPI通信の設定
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
   SPI.setClockDivider(16);
@@ -227,37 +233,37 @@ void setup() {
   digitalWrite(SSIR, HIGH);
   digitalWrite(SSUS, HIGH);
   digitalWrite(SSLN, HIGH);
-//方位センサの設定
+  //方位センサの設定
   compass.init();
   front = (int)compass;
-//タイマー割り込みの設定
+  //タイマー割り込みの設定
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
-//ピン割り込みの設定
+  //ピン割り込みの設定
   attachInterrupt(BT1, increase, RISING);
   attachInterrupt(BT3, decrease, RISING);
   attachInterrupt(SWR, startTimer, RISING);
   attachInterrupt(SWL, change, CHANGE);
 }
-int interval=0;
+int interval = 0;
 void loop() {
   //SPI通信のSSピンをHIGHにする
   digitalWrite(SSLN, HIGH);
   digitalWrite(SSIR, HIGH);
   digitalWrite(SSUS, HIGH);
-  digitalWrite(KICKER,LOW);
   //変数の初期化
   double m0 = 0, m1 = 0, m2 = 0;
   int dir = irRead(role);
   int line = lineRead();
-  int y = posiRead()%128;
+  int y = posiRead() % 128;
   int x = y % 8;
   y /= 8;
   if (digitalRead(SWR) == LOW) {
     Timer3.stop();//I2C通信が中断されないようにタイマー割り込みを停止させる
     stop();//ロボットの動きを止める
+    dribble(1);
     switch (mode) {
       case 0:
-      //どのラインセンサが反応しているかを表示
+        //どのラインセンサが反応しているかを表示
         lcd.clear();
         lcd.setCursor(2, 0);
         lcd.print("Line");
@@ -265,7 +271,7 @@ void loop() {
         lcd.print(lineRead());
         break;
       case 1:
-      //ロボットがどの区分にいるかを表示
+        //ロボットがどの区分にいるかを表示
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
@@ -278,7 +284,7 @@ void loop() {
         lcd.print(y);
         break;
       case 2:
-      //方位センサの値を表示
+        //方位センサの値を表示
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
@@ -290,7 +296,7 @@ void loop() {
         lcd.print("deg");
         break;
       case 3:
-      //irセンサを読むマイコンから送られてくる進行方向を表示
+        //irセンサを読むマイコンから送られてくる進行方向を表示
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
@@ -298,32 +304,38 @@ void loop() {
         lcd.setCursor(3, 1);
         lcd.print(irRead(role));
         break;
+      case 4:
+        //ボールがキッカーの前にあるか表示
+        lcd.clear();
+        lcd.backlight();
+        lcd.setCursor(2, 0);
+        lcd.print("Ball");
+        lcd.setCursor(3, 1);
+        lcd.print(digitalRead(BALL));
+        break;
     }
     delay(100);
-  } else if (dir == 360) {//ボールがコートから出された場合
-    if((posiRead()/128==1)||(role==0)){//ゴール前にいるかオフェンスの時
-      move(mani, mani, mani);//その場で相手ゴール側に向く
-    }else{
-    //ゴール前に戻る
-      if(x%4>1){//正面にゴールがあれば
-        dir = 270;
-      }else{
-        if(x/4==0){//コートの右半分にいれば
-          dir = 180;
-        }else{
-          dir = 0;
+  } else {
+    int pwm = 110;//1024/10
+    if (dir == 360) {//ボールがコートから出された場合
+      if ((posiRead() / 128 == 1) || (role == 0)) { //ゴール前にいるかオフェンスの時
+        pwm = 0;//その場に止まる
+      } else {
+        //ゴール前に戻る
+        if (x % 4 > 1) { //正面にゴールがあれば
+          dir = 270;
+          pwm = 70;
+        } else {
+          if (x / 4 == 0) { //コートの右半分にいれば
+            dir = 180;
+          } else {
+            dir = 0;
+          }
         }
       }
-    dir2out(dir, 90, &m0, &m1, &m2);//進行方向からモタドラへの出力を決める
-    //モタドラへの出力にpd制御の操作量を加える
-    m0 += mani;
-    m1 += mani;
-    m2 += mani;
-    move(m0, m1, m2);//モーターを動かす
     }
-  } else {
     switch (line) {
-      //ラインセンサに反応があれば進行方向を変える
+        //ラインセンサに反応があれば進行方向を変える
       case 1:
         dir = 330;
         break;
@@ -337,41 +349,43 @@ void loop() {
         dir = 90;
         break;
       case 5:
-        dir = 30;
+        dir = 60;
         break;
       case 6:
-        dir = 150;
+        dir = 120;
         break;
       default:
         break;
     }
-    int pwm = 90;
-    if(x%4>1){//正面にゴールがあれば
-      if((digitalRead(BALL)==LOW)&&(interval-millis()>500)){
-      //キッカーがボールに届き,かつ充電が終わっていればキッカーを動かす
-        digitalWrite(KICKER,HIGH);
-        digitalWrite(KICKER,LOW);
+    if (x % 4 > 1) { //正面にゴールがあれば&& (interval - millis() > 5000)
+      if ((dir > 85) && (dir <95) && (digitalRead(BALL) == LOW) ) {
+        //キッカーがボールに届き,かつ充電が終わっていればキッカーを動かす
+        digitalWrite(KICKER, LOW);
+        delay(5);
+        digitalWrite(KICKER, HIGH);
         interval = millis();
       }
-    }else if(
-      ((x==0)&&(dir<45)&&(dir>315))//右端にいて右に進もうとしている場合
-      ||((x==4)&&(dir>135)&&(dir<225))//左端にいて左に進もうとしている場合
-      ||((y<2)&&(dir>45)&&(dir<135))//相手側のゴールライン付近で前に進もうとしてる場合
-      ||((y==9)&&(y==8)&&(dir>225)&&(dir<315))//自陣側のゴールライン付近で後ろに進もうとしてる場合
-    ){
-      pwm = 64;
     }
+    //    else if (
+    //      ((x == 0) && (dir < 45) && (dir > 315)) //右端にいて右に進もうとしている場合
+    //      || ((x == 4) && (dir > 135) && (dir < 225)) //左端にいて左に進もうとしている場合
+    //      || ((y < 2) && (dir > 45) && (dir < 135)) //相手側のゴールライン付近で前に進もうとしてる場合
+    //      || ((y == 9) && (y == 8) && (dir > 225) && (dir < 315)) //自陣側のゴールライン付近で後ろに進もうとしてる場合
+    //    ) {
+    //      pwm = 32;
+    //    }
     dir2out(dir, pwm, &m0, &m1, &m2);//進行方向からモタドラへの出力を決める
     //モタドラへの出力にpd制御の操作量を加える
     m0 += mani;
     m1 += mani;
     m2 += mani;
     move(m0, m1, m2);//モーターを動かす
-  }
-  
-    if(dir==90){//ボールが正面にあればドリブラーを回す
+    if (dir == 90) { //ボールが正面にあればドリブラーを回す
       dribble(0);
-    }else{
+    } else {
       dribble(1);
     }
+  }
+
+
 }
