@@ -145,14 +145,14 @@ void dribble(int judg) {
 }
 
 int compassAddress = 0x42 >> 1;
-int e = 0, e1 = 0, front;
+int e = 0, e1 = 0, goal = 0;
 double mani = 0, kp = KU;
 GC5883 compass;
 void timerHandler() {
   //相手ゴール側に向くためのpd制御
   e1 = e;
   compass.init();
-  e = front - (int)compass;
+  e = goal - (int)compass;
   if (e > 180) {
     e -= 360;
   }
@@ -197,8 +197,10 @@ void change() {
 }
 //------------------------------------------------
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+int front;
 void setup() {
   //ioピンの設定
+  pinMode(BT2,INPUT);
   pinMode(InA0, OUTPUT);
   pinMode(InB0, OUTPUT);
   pinMode(PWM0, OUTPUT);
@@ -257,7 +259,9 @@ void loop() {
   int y = posiRead() % 128;
   int x = y % 8;
   y /= 8;
+  goal = front;
   if (digitalRead(SWR) == LOW) {
+    //ロボット停止
     Timer3.stop();//I2C通信が中断されないようにタイマー割り込みを停止させる
     stop();//ロボットの動きを止める
     dribble(1);
@@ -312,11 +316,18 @@ void loop() {
         lcd.print("Ball");
         lcd.setCursor(3, 1);
         lcd.print(digitalRead(BALL));
+        if(digitalRead(BT2)==HIGH) {
+        //充電が終わっていればキッカーを動かす
+        digitalWrite(KICKER, LOW);
+        delay(10);
+        digitalWrite(KICKER, HIGH);
+        interval = millis();
+      }
         break;
     }
     delay(100);
   } else {
-    int pwm = 110;//1024/10
+    int pwm = 110;//移動する速さを調整する変数
     if (dir == 360) {//ボールがコートから出された場合
       if ((posiRead() / 128 == 1) || (role == 0)) { //ゴール前にいるかオフェンスの時
         pwm = 0;//その場に止まる
@@ -357,23 +368,50 @@ void loop() {
       default:
         break;
     }
-    if (x % 4 > 1) { //正面にゴールがあれば&& (interval - millis() > 5000)
-      if ((dir > 85) && (dir <95) && (digitalRead(BALL) == LOW) ) {
-        //キッカーがボールに届き,かつ充電が終わっていればキッカーを動かす
+    if ((dir > 85) && (dir < 95) && digitalRead(BALL) == LOW) { //キッカーがボールに届くなら
+      if (x % 4 <= 1) {//ゴールの正面にいない場合
+        //x/4は左半分なら1右半分なら0
+        //左半分にいるとき右に向き(+)右半分にいれば左に向く(-)
+        int vari=0;
+        if (y / 8 == 0) {
+          vari = 50 - 2 * y;
+        } else {
+          vari = 20 + 2 * y;
+        }
+        if (x / 4 == 0) {
+          goal = front + vari;
+          e += vari;
+          e1 = e;
+        } else {
+          goal = front - vari;
+          e -= vari;
+          e1 = e;
+        }
+        while ((e > -5) && (e < 5)) {
+          move(0, mani/4, 0);
+        }
+      }
+      if (interval - millis() > 5000) {
+        //充電が終わっていればキッカーを動かす
         digitalWrite(KICKER, LOW);
         delay(5);
         digitalWrite(KICKER, HIGH);
         interval = millis();
       }
     }
-    //    else if (
-    //      ((x == 0) && (dir < 45) && (dir > 315)) //右端にいて右に進もうとしている場合
-    //      || ((x == 4) && (dir > 135) && (dir < 225)) //左端にいて左に進もうとしている場合
-    //      || ((y < 2) && (dir > 45) && (dir < 135)) //相手側のゴールライン付近で前に進もうとしてる場合
-    //      || ((y == 9) && (y == 8) && (dir > 225) && (dir < 315)) //自陣側のゴールライン付近で後ろに進もうとしてる場合
-    //    ) {
-    //      pwm = 32;
-    //    }
+//  if (//PD制御のパラメータが
+//      ((x == 0) && (dir < 45) && (dir > 315)) //右端にいて右に進もうとしている場合
+//      || ((x == 4) && (dir > 135) && (dir < 225)) //左端にいて左に進もうとしている場合
+//      ||((x%4 == 0)//ゴールの正面にいない
+//      && (
+//        ((y < 2) && (dir > 45) && (dir < 135)) //相手側のゴールライン付近で前に進もうとしてる場合
+//        || (((y == 9) || (y == 8)) && (dir > 225) && (dir < 315)) //自陣側のゴールライン付近で後ろに進もうとしてる場合
+//      )
+//    )
+//    ) {
+//      //ライン際では止まる
+//      pwm = 0;
+//    }
     dir2out(dir, pwm, &m0, &m1, &m2);//進行方向からモタドラへの出力を決める
     //モタドラへの出力にpd制御の操作量を加える
     m0 += mani;
