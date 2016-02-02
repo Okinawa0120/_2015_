@@ -15,17 +15,17 @@
 6右と後ろ
 */
 //ピン番号
-#define InA0 24//移動用モーター
-#define InB0 25//移動用モーター
+#define INA0 24//移動用モーター
+#define INB0 25//移動用モーター
 #define PWM0 3//移動用モーター
-#define InA1 23//移動用モーター
-#define InB1 22//移動用モーター
+#define INA1 23//移動用モーター
+#define INB1 22//移動用モーター
 #define PWM1 2//移動用モーター
-#define InA2 28//移動用モーター
-#define InB2 29//移動用モーター
+#define INA2 28//移動用モーター
+#define INB2 29//移動用モーター
 #define PWM2 5//移動用モーター
-#define InAD 26//ドリブラー
-#define InBD 27//ドリブラー
+#define INAD 26//ドリブラー
+#define INBD 27//ドリブラー
 #define PWMD 4//ドリブラー
 #define SSIR 53//赤外線センサを読むマイコンのSSピン
 #define SSUS 52//超音波センサを読むマイコンのSSピン
@@ -39,9 +39,10 @@
 #define BT3 46//UI用のスイッチ
 #define BALL 7//ボール検出センサ
 //ピン番号以外のマクロ
-#define KU 1//pidのパラメータ
-#define TU 4.5//pidのパラメータ
 #define NOM 5 //Number Of Modesの頭文字,モードの数
+#define LPWM 90 //ラインの復帰スピード
+#define IMAX 75
+int pwm = 0;//移動する速さを調整する変数
 //------------------------------------------------
 int posiRead() {
   //超音波センサを読むマイコンからロボットがどの区分にいるかを受け取る
@@ -63,12 +64,8 @@ int irRead(int send) {
   //irセンサを読むマイコンから進行方向を受け取る
   int recvd;
   digitalWrite(SSIR, LOW);
-  recvd = SPI.transfer(1);
+  recvd = SPI.transfer(send);
   digitalWrite(SSIR, HIGH);
-  if (recvd == 254) {
-    Serial.println("wwwwwwwwwwwww");
-    return 360;
-  }
   if (recvd == 255) {
     return 360;
   }
@@ -89,82 +86,86 @@ void dir2out(int dir, int pwm, double *m0, double *m1, double *m2) {
 void move(double m0, double m1, double m2) {
   //移動用モーターを動かす
   if (m0 > 0) {
-    digitalWrite(InA0, HIGH);
-    digitalWrite(InB0, LOW);
+    digitalWrite(INA0, HIGH);
+    digitalWrite(INB0, LOW);
     analogWrite(PWM0, m0);
   }
   else {
     m0 *= -1;
-    digitalWrite(InA0, LOW);
-    digitalWrite(InB0, HIGH);
+    digitalWrite(INA0, LOW);
+    digitalWrite(INB0, HIGH);
     analogWrite(PWM0, m0);
   }
 
   if (m1 > 0) {
-    digitalWrite(InA1, HIGH);
-    digitalWrite(InB1, LOW);
+    digitalWrite(INA1, HIGH);
+    digitalWrite(INB1, LOW);
     analogWrite(PWM1, m1);
   }
   else {
     m1 *= -1;
-    digitalWrite(InA1, LOW);
-    digitalWrite(InB1, HIGH);
+    digitalWrite(INA1, LOW);
+    digitalWrite(INB1, HIGH);
     analogWrite(PWM1, m1);
   }
 
   if (m2 > 0) {
-    digitalWrite(InA2, HIGH);
-    digitalWrite(InB2, LOW);
+    digitalWrite(INA2, HIGH);
+    digitalWrite(INB2, LOW);
     analogWrite(PWM2, m2);
   }
   else {
     m2 *= -1;
-    digitalWrite(InA2, LOW);
-    digitalWrite(InB2, HIGH);
+    digitalWrite(INA2, LOW);
+    digitalWrite(INB2, HIGH);
     analogWrite(PWM2, m2);
   }
 }
 void stop() {
   //移動用モーターを止める
-  digitalWrite(InA0, LOW);
-  digitalWrite(InB0, LOW);
-  digitalWrite(InA1, LOW);
-  digitalWrite(InB1, LOW);
-  digitalWrite(InA2, LOW);
-  digitalWrite(InB2, LOW);
+  digitalWrite(INA0, LOW);
+  digitalWrite(INB0, LOW);
+  digitalWrite(INA1, LOW);
+  digitalWrite(INB1, LOW);
+  digitalWrite(INA2, LOW);
+  digitalWrite(INB2, LOW);
 }
 void dribble(int judg) {
   if (judg == 0) {
-    digitalWrite(InAD, HIGH);
-    digitalWrite(InBD, LOW);
+    digitalWrite(INAD, HIGH);
+    digitalWrite(INBD, LOW);
     analogWrite(PWMD, 50);
   } else {
-    digitalWrite(InAD, LOW);
-    digitalWrite(InBD, LOW);
+    digitalWrite(INAD, LOW);
+    digitalWrite(INBD, LOW);
   }
 }
 
 int compassAddress = 0x42 >> 1;
-int e = 0, e1 = 0, goal = 0;
-double mani = 0, kp = KU;
+int e = 0, e1 = 0, goal = 0,in=0;
+double mani = 0, kd=10,kp=1.2,ki=0.42;
 GC5883 compass;
 void timerHandler() {
-  //相手ゴール側に向くためのpd制御
-  e1 = e;
+  e1=e;
   compass.init();
-  e = goal - (int)compass;
-  if (e > 180) {
-    e -= 360;
+  e=goal-(int)compass;
+  if(e>180){
+    e-=360;
   }
-  if (e < -180) {
-    e += 360;
+  if(e<-180){
+    e+=360;
   }
-  if ((e > -40) && (e < 40)) {
-    kp = KU + 0.8;
-  } else {
-    kp = KU;
+  in+=e;
+  if(in>IMAX){
+    in = IMAX;
+  }else if(in<-IMAX){
+    in = -IMAX;
   }
-  mani = 0.6 * kp * e + 0.125 * TU * (e - e1);
+  if(pwm != 0){
+    in = 0;
+  }
+  mani=0.6*kp*e+0.5*ki*in+0.125*kd*(e-e1);
+  // 割り込み発生時に実行する部分
 }
 
 volatile int mode = 0;
@@ -201,25 +202,25 @@ int front;
 void setup() {
   //ioピンの設定
   pinMode(BT2,INPUT);
-  pinMode(InA0, OUTPUT);
-  pinMode(InB0, OUTPUT);
+  pinMode(INA0, OUTPUT);
+  pinMode(INB0, OUTPUT);
   pinMode(PWM0, OUTPUT);
-  pinMode(InA1, OUTPUT);
-  pinMode(InB1, OUTPUT);
+  pinMode(INA1, OUTPUT);
+  pinMode(INB1, OUTPUT);
   pinMode(PWM1, OUTPUT);
-  pinMode(InA2, OUTPUT);
-  pinMode(InB2, OUTPUT);
+  pinMode(INA2, OUTPUT);
+  pinMode(INB2, OUTPUT);
   pinMode(PWM2, OUTPUT);
   pinMode(SWR, INPUT);
   pinMode(SWL, INPUT);
   pinMode(BALL, INPUT);
   pinMode(KICKER, OUTPUT);
-  digitalWrite(InA0, HIGH);
-  digitalWrite(InB0, HIGH);
-  digitalWrite(InA1, HIGH);
-  digitalWrite(InB1, HIGH);
-  digitalWrite(InA2, HIGH);
-  digitalWrite(InB2, HIGH);
+  digitalWrite(INA0, HIGH);
+  digitalWrite(INB0, HIGH);
+  digitalWrite(INA1, HIGH);
+  digitalWrite(INB1, HIGH);
+  digitalWrite(INA2, HIGH);
+  digitalWrite(INB2, HIGH);
   //lcdの設定
   lcd.init();
   lcd.backlight();
@@ -327,9 +328,15 @@ void loop() {
     }
     delay(100);
   } else {
-    int pwm = 110;//移動する速さを調整する変数
+    if (dir == 90) { //ボールが正面にあればドリブラーを回す
+      dribble(0);
+    } else {
+      dribble(1);
+    }
+    pwm = 110;
     if (dir == 360) {//ボールがコートから出された場合
-      if ((posiRead() / 128 == 1) || (role == 0)) { //ゴール前にいるかオフェンスの時
+      if ((posiRead() / 128 == 1) ||
+      (role == 0)) { //ゴール前にいるかオフェンスの時
         pwm = 0;//その場に止まる
       } else {
         //ゴール前に戻る
@@ -349,21 +356,27 @@ void loop() {
         //ラインセンサに反応があれば進行方向を変える
       case 1:
         dir = 330;
+        pwm = LPWM;
         break;
       case 2:
         dir = 210;
+        pwm = LPWM;
         break;
       case 3:
         dir = 270;
+        pwm = LPWM;
         break;
       case 4:
         dir = 90;
+        pwm = LPWM;
         break;
       case 5:
         dir = 60;
+        pwm = LPWM;
         break;
       case 6:
         dir = 120;
+        pwm = LPWM;
         break;
       default:
         break;
@@ -412,17 +425,35 @@ void loop() {
 //      //ライン際では止まる
 //      pwm = 0;
 //    }
+    if(x%4 == 0){
+      if(f.mysin(dir)>0){
+        if(y<2){
+          dir = atan2(f.mysin(dir)/2,f.mycos(dir))*180/PI;
+        }
+      }else{
+        if((y==9)||(y==8)){
+          dir = atan2(f.mysin(dir)/2,f.mycos(dir))*180/PI;
+      }
+    }
+    if(f.mycos(dir)>0){
+      if(x==0){
+        pwm *= f.mysin(dir);
+        dir = atan2(1,0)*180/PI;
+      }
+    }else{
+      if(x==4){
+        pwm *= f.mysin(dir);
+        dir = atan2(1,0)*180/PI;
+      }
+    }
+  }
     dir2out(dir, pwm, &m0, &m1, &m2);//進行方向からモタドラへの出力を決める
     //モタドラへの出力にpd制御の操作量を加える
     m0 += mani;
     m1 += mani;
     m2 += mani;
     move(m0, m1, m2);//モーターを動かす
-    if (dir == 90) { //ボールが正面にあればドリブラーを回す
-      dribble(0);
-    } else {
-      dribble(1);
-    }
+    
   }
 
 
