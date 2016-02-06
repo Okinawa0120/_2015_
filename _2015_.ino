@@ -333,7 +333,7 @@ void loop() {
     } else {
       dribble(1);
     }
-    pwm = 110;
+    pwm = 90;
     if (dir == 360) {//ボールがコートから出された場合
       if ((posiRead() / 128 == 1) ||
       (role == 0)) { //ゴール前にいるかオフェンスの時
@@ -387,9 +387,9 @@ void loop() {
         //左半分にいるとき右に向き(+)右半分にいれば左に向く(-)
         int vari=0;
         if (y / 8 == 0) {
-          vari = 50 - 2 * y;
+          vari = 20 - 2 * y;
         } else {
-          vari = 20 + 2 * y;
+          vari = 10 + y;
         }
         if (x / 4 == 0) {
           goal = front + vari;
@@ -403,7 +403,7 @@ void loop() {
         while ((e > -5) && (e < 5)) {
           move(0, mani/4, 0);
         }
-      }
+      }else 
       if (interval - millis() > 5000) {
         //充電が終わっていればキッカーを動かす
         digitalWrite(KICKER, LOW);
