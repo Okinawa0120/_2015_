@@ -1,3 +1,4 @@
+#include <movement.h>//自作ライブラリ
 #include <GC5883.h>
 #include <DueTimer.h>
 #include <mymath.h>//自作ライブラリ
@@ -74,62 +75,7 @@ int irRead(int send) {
   return recvd;
 }
 mymath f;//sin,cosのテーブル参照の関数の自作クラス
-void dir2out(int dir, int pwm, double *m0, double *m1, double *m2) {
-  //進行方向からモーターの出力を決める
-  double x, y;
-  x = pwm * f.mycos(dir);
-  y = pwm * f.mysin(dir);
-  *m0 = x * f.mycos(300) + y * f.mysin(300);
-  *m1 = -1 * x;
-  *m2 = x * f.mycos(60) + y * f.mysin(60);
-}
-void move(double m0, double m1, double m2) {
-  //移動用モーターを動かす
-  if (m0 > 0) {
-    digitalWrite(INA0, HIGH);
-    digitalWrite(INB0, LOW);
-    analogWrite(PWM0, m0);
-  }
-  else {
-    m0 *= -1;
-    digitalWrite(INA0, LOW);
-    digitalWrite(INB0, HIGH);
-    analogWrite(PWM0, m0);
-  }
-
-  if (m1 > 0) {
-    digitalWrite(INA1, HIGH);
-    digitalWrite(INB1, LOW);
-    analogWrite(PWM1, m1);
-  }
-  else {
-    m1 *= -1;
-    digitalWrite(INA1, LOW);
-    digitalWrite(INB1, HIGH);
-    analogWrite(PWM1, m1);
-  }
-
-  if (m2 > 0) {
-    digitalWrite(INA2, HIGH);
-    digitalWrite(INB2, LOW);
-    analogWrite(PWM2, m2);
-  }
-  else {
-    m2 *= -1;
-    digitalWrite(INA2, LOW);
-    digitalWrite(INB2, HIGH);
-    analogWrite(PWM2, m2);
-  }
-}
-void stop() {
-  //移動用モーターを止める
-  digitalWrite(INA0, LOW);
-  digitalWrite(INB0, LOW);
-  digitalWrite(INA1, LOW);
-  digitalWrite(INB1, LOW);
-  digitalWrite(INA2, LOW);
-  digitalWrite(INB2, LOW);
-}
+movement m;//移動系の自作クラス
 void dribble(int judg) {
   if (judg == 0) {
     digitalWrite(INAD, HIGH);
@@ -165,6 +111,7 @@ void timerHandler() {
     in = 0;
   }
   mani=0.6*kp*e+0.5*ki*in+0.125*kd*(e-e1);
+  m.setYaw(mani);
   // 割り込み発生時に実行する部分
 }
 
@@ -264,7 +211,7 @@ void loop() {
   if (digitalRead(SWR) == LOW) {
     //ロボット停止
     Timer3.stop();//I2C通信が中断されないようにタイマー割り込みを停止させる
-    stop();//ロボットの動きを止める
+    m.stop();//ロボットの動きを止める
     dribble(1);
     switch (mode) {
       case 0:
@@ -335,19 +282,17 @@ void loop() {
     }
     pwm = 90;
     if (dir == 360) {//ボールがコートから出された場合
-      if ((posiRead() / 128 == 1) ||
-      (role == 0)) { //ゴール前にいるかオフェンスの時
+      if ((posiRead() / 128 == 1) || (role == 0)) { //ゴール前にいるかオフェンスの時
         pwm = 0;//その場に止まる
       } else {
         //ゴール前に戻る
         if (x % 4 > 1) { //正面にゴールがあれば
-          dir = 270;
-          pwm = 70;
+          m.setDir(270,70);//後進する
         } else {
           if (x / 4 == 0) { //コートの右半分にいれば
-            dir = 180;
+            m.setDir(180,pwm);
           } else {
-            dir = 0;
+            m.setDir(0,pwm);
           }
         }
       }
@@ -355,28 +300,22 @@ void loop() {
     switch (line) {
         //ラインセンサに反応があれば進行方向を変える
       case 1:
-        dir = 330;
-        pwm = LPWM;
+        m.setDir(330,LPWM);
         break;
       case 2:
-        dir = 210;
-        pwm = LPWM;
+        m.setDir(210,LPWM);
         break;
       case 3:
-        dir = 270;
-        pwm = LPWM;
+        m.setDir(270,LPWM);
         break;
       case 4:
-        dir = 90;
-        pwm = LPWM;
+        m.setDir(90,LPWM);
         break;
       case 5:
-        dir = 60;
-        pwm = LPWM;
+        m.setDir(60,LPWM);
         break;
       case 6:
-        dir = 120;
-        pwm = LPWM;
+        m.setDir(120,LPWM);
         break;
       default:
         break;
@@ -401,7 +340,7 @@ void loop() {
           e1 = e;
         }
         while ((e > -5) && (e < 5)) {
-          move(0, mani/4, 0);
+          m.moveMotor(0, mani/4, 0);
         }
       }else 
       if (interval - millis() > 5000) {
@@ -412,48 +351,27 @@ void loop() {
         interval = millis();
       }
     }
-//  if (//PD制御のパラメータが
-//      ((x == 0) && (dir < 45) && (dir > 315)) //右端にいて右に進もうとしている場合
-//      || ((x == 4) && (dir > 135) && (dir < 225)) //左端にいて左に進もうとしている場合
-//      ||((x%4 == 0)//ゴールの正面にいない
-//      && (
-//        ((y < 2) && (dir > 45) && (dir < 135)) //相手側のゴールライン付近で前に進もうとしてる場合
-//        || (((y == 9) || (y == 8)) && (dir > 225) && (dir < 315)) //自陣側のゴールライン付近で後ろに進もうとしてる場合
-//      )
-//    )
-//    ) {
-//      //ライン際では止まる
-//      pwm = 0;
-//    }
-    if(x%4 == 0){
-      if(f.mysin(dir)>0){
-        if(y<2){
-          dir = atan2(f.mysin(dir)/2,f.mycos(dir))*180/PI;
+    if(x%4 == 0){//コートの左右どちらかの端にいて
+      if(m.getY()>0){//前進していて
+        if(y<2){//前方に障害物があれば
+          m.setY(m.getY()/2);//y成分を削減
         }
-      }else{
-        if((y==9)||(y==8)){
-          dir = atan2(f.mysin(dir)/2,f.mycos(dir))*180/PI;
+      }else{//後進していて
+        if((y==9)||(y==8)){//後方に障害物があれば
+          m.setY(m.getY()/2);//y成分を削減
       }
     }
-    if(f.mycos(dir)>0){
-      if(x==0){
-        pwm *= f.mysin(dir);
-        dir = atan2(1,0)*180/PI;
+    if(m.getX()>0){//右に進んでいて
+      if(x==0){//右端にいれば
+        m.setX(0);//x成分を削除
       }
-    }else{
-      if(x==4){
-        pwm *= f.mysin(dir);
-        dir = atan2(1,0)*180/PI;
+    }else{//左に進んでいて
+      if(x==4){//左端にいれば
+        m.setX(0);//x成分を削除
       }
     }
   }
-    dir2out(dir, pwm, &m0, &m1, &m2);//進行方向からモタドラへの出力を決める
-    //モタドラへの出力にpd制御の操作量を加える
-    m0 += mani;
-    m1 += mani;
-    m2 += mani;
-    move(m0, m1, m2);//モーターを動かす
-    
+    m.move();
   }
 
 
