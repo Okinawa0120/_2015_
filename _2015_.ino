@@ -89,7 +89,7 @@ void dribble(int judg) {
 
 int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, goal = 0, in = 0;
-double mani = 0, kd = 50, kp = 3.0, ki = 0.42;
+double mani = 0, kd = 50, kp = 1.2, ki = 0.42;
 GC5883 compass;
 void timerHandler() {
   e1 = e;
@@ -135,7 +135,7 @@ void startTimer() {
   e = (int)compass;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
 }
-int role = digitalRead(SWL); //ロボットのオフェンス,ディフェンスを表す変数
+int role; //ロボットのオフェンス,ディフェンスを表す変数
 void change() {
   if (digitalRead(SWL) == LOW) {
     role = 0;//オフェンス
@@ -194,6 +194,7 @@ void setup() {
   //タイマー割り込みの設定
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
   //ピン割り込みの設定
+  role = digitalRead(SWL);
   attachInterrupt(BT1, increase, RISING);
   attachInterrupt(BT3, decrease, RISING);
   attachInterrupt(SWR, startTimer, RISING);
@@ -349,8 +350,9 @@ void loop() {
           e -= vari;
           e1 = e;
         }
-        while ((e > -5) && (e < 5)) {
-          m.moveMotor(0, mani / 4, 0);
+        while ((digitalRead(BALL) == LOW)&&((e < -5) || (e > 5))) {
+          Serial.println("spinning");
+          m.move(0.0,0.0, mani);
         }
       } else if (interval - millis() > 5000) {
         //充電が終わっていればキッカーを動かす
