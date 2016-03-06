@@ -42,8 +42,7 @@
 //ピン番号以外のマクロ
 #define NOM 5 //Number Of Modesの頭文字,モードの数
 #define LPWM 130 //ラインの復帰スピード
-#define IMAX 75
-int pwm = 0;//移動する速さを調整する変数
+#define IMAX 16
 //------------------------------------------------
 int posiRead() {
   //超音波センサを読むマイコンからロボットがどの区分にいるかを受け取る
@@ -70,6 +69,12 @@ int irRead(int send) {
   if (recvd == 255) {
     return 360;
   }
+  if (recvd == 254) {
+    return 361;
+  }
+  if (recvd == 253) {
+    return 362;
+  }
   recvd *= 10;
   recvd /= 7;
   return recvd;
@@ -89,8 +94,9 @@ void dribble(int judg) {
 
 int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, goal = 0, in = 0;
-double mani = 0, kd = 50, kp = 1.2, ki = 0.42;
+double mani = 0, kd = 50, kp = 2.0, ki = 2;
 GC5883 compass;
+int stopfg=0;//停止フラグ
 void timerHandler() {
   e1 = e;
   compass.init();
@@ -107,7 +113,7 @@ void timerHandler() {
   } else if (in < -IMAX) {
     in = -IMAX;
   }
-  if (pwm != 0) {
+  if (stopfg == 0) {
     in = 0;
   }
   mani = 0.6 * kp * e + 0.5 * ki * in + 0.125 * kd * (e - e1);
@@ -209,6 +215,7 @@ void loop() {
   digitalWrite(SSUS, HIGH);
   //変数の初期化
   double m0 = 0, m1 = 0, m2 = 0;
+  int pwm = 0;//移動する速さを調整する変数
   int line = lineRead();
   int y = posiRead() % 128;
   int x = y % 8;
@@ -234,6 +241,7 @@ void loop() {
         lcd.backlight();
         lcd.setCursor(2, 0);
         lcd.print("Position");
+        lcd.print(posiRead()/128);
         lcd.setCursor(3, 1);
         lcd.print("x:");
         lcd.print(x);
@@ -260,7 +268,7 @@ void loop() {
         lcd.setCursor(2, 0);
         lcd.print("Direction");
         lcd.setCursor(3, 1);
-        lcd.print(irRead(2));
+        lcd.print(irRead(role));
         break;
       case 4:
         //ボールがキッカーの前にあるか表示
@@ -282,23 +290,37 @@ void loop() {
     delay(100);
   } else {
     int dir = irRead(role);
+    pwm = 130;
     Serial.println(dir);
     if (dir == 90) { //ボールが正面にあればドリブラーを回す
       dribble(0);
     } else {
       dribble(1);
     }
-    pwm = 130;
+    if(dir == 361){
+      dir = 0;
+      pwm = 70;
+    }
+    if(dir == 362){
+      dir = 180;
+      pwm = 70;
+    }
     m.setDir(dir, pwm);
     if (dir == 360) {//ボールがコートから出された場合
-      if ((posiRead() / 128 == 1) || (role == 0)) { //ゴール前にいるかオフェンスの時
+      if (posiRead() / 128 == 1) { //ゴール前にいるかオフェンスの時
         pwm = 0;
         m.setX(0);
         m.setY(0);//その場に止まる
       } else {
         //ゴール前に戻る
         if (x % 4 > 1) { //正面にゴールがあれば
-          m.setDir(270, 70); //後進する
+         if(role == 1){
+            m.setDir(270, 100); //後進する
+         }else{
+           pwm = 0;
+        m.setX(0);
+        m.setY(0);//その場に止まる
+         }
         } else {
           if (x / 4 == 0) { //コートの右半分にいれば
             m.setDir(180, pwm);
@@ -307,6 +329,9 @@ void loop() {
           }
         }
       }
+      pwm = 0;
+        m.setX(0);
+        m.setY(0);//その場に止まる
     }
     switch (line) {
         //ラインセンサに反応があれば進行方向を変える
@@ -367,7 +392,7 @@ void loop() {
           m.setY(m.getY() / 2); //y成分を削減
         }
       }
-      if(m.getY() < 0){//後進していて
+      if((m.getY() < 0)&&(dir!=360)){//後進していて
         if (y == 8) { //後方に障害物があれば
           irRead(2);
           m.setDir(irRead(role),pwm); //直線移動
@@ -383,6 +408,11 @@ void loop() {
         }
       }
     m.move();
+    if((m.getY()==0)&&(m.getX()==0)){
+      stopfg = 1;
+    }else{
+      stopfg = 0;
+    }
   }
 
 
