@@ -32,16 +32,16 @@
 #define SSUS 52//超音波センサを読むマイコンのSSピン
 #define SSLN 43//ラインセンサを読むマイコンのSSピン
 #define INTRPT 42//ライン割り込み(Interruptの略)
-#define KICKER 41//ソレノイドを制御する電磁リレー
+#define KICKER 7//ソレノイドを制御する電磁リレー
 #define SWR 50//UI用のスイッチ
 #define SWL 51//UI用のスイッチ
 #define BT1 44//UI用のスイッチ
 #define BT2 45//UI用のスイッチ
 #define BT3 46//UI用のスイッチ
-#define BALL 7//ボール検出センサ
+#define BALL 41//ボール検出センサ
 //ピン番号以外のマクロ
 #define NOM 5 //Number Of Modesの頭文字,モードの数
-#define LPWM 130 //ラインの復帰スピード
+//#define LPWM 130 //ラインの復帰スピード
 #define IMAX 16
 //------------------------------------------------
 int posiRead() {
@@ -149,11 +149,6 @@ void change() {
     role = 1;//ディフェンス
   }
 }
-void opposite() {
-  m.setX(-1*m.getX());
-  m.setY(-1*m.getY());
-  m.move();
-}
 //------------------------------------------------
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 int front;
@@ -195,6 +190,8 @@ void setup() {
   digitalWrite(SSUS, HIGH);
   digitalWrite(SSLN, HIGH);
   //方位センサの設定
+  digitalWrite(KICKER, LOW);
+  delay(1000);
   compass.init();
   front = (int)compass;
   //タイマー割り込みの設定
@@ -205,7 +202,6 @@ void setup() {
   attachInterrupt(BT3, decrease, RISING);
   attachInterrupt(SWR, startTimer, RISING);
   attachInterrupt(SWL, change, CHANGE);
-  attachInterrupt(INTRPT, opposite, RISING);
 }
 int interval = 0;
 void loop() {
@@ -280,9 +276,9 @@ void loop() {
         lcd.print(digitalRead(BALL));
         if (digitalRead(BT2) == HIGH) {
           //充電が終わっていればキッカーを動かす
-          digitalWrite(KICKER, LOW);
-          delay(10);
           digitalWrite(KICKER, HIGH);
+          delay(50);
+          digitalWrite(KICKER, LOW);
           interval = millis();
         }
         break;
@@ -290,8 +286,7 @@ void loop() {
     delay(100);
   } else {
     int dir = irRead(role);
-    pwm = 130;
-    Serial.println(dir);
+    pwm = 150;
     if (dir == 90) { //ボールが正面にあればドリブラーを回す
       dribble(0);
     } else {
@@ -329,32 +324,16 @@ void loop() {
           }
         }
       }
-      pwm = 0;
-        m.setX(0);
-        m.setY(0);//その場に止まる
     }
-    switch (line) {
-        //ラインセンサに反応があれば進行方向を変える
-      case 1:
-        m.setDir(330, LPWM);
-        break;
-      case 2:
-        m.setDir(210, LPWM);
-        break;
-      case 3:
-        m.setDir(270, LPWM);
-        break;
-      case 4:
-        m.setDir(90, LPWM);
-        break;
-      case 5:
-        m.setDir(60, LPWM);
-        break;
-      case 6:
-        m.setDir(120, LPWM);
-        break;
-      default:
-        break;
+    if(digitalRead(INTRPT)==HIGH){
+      m.setY(pwm*(line&4)/4-pwm*(line&8)/8);
+      m.setX(pwm*(line&2)/2-pwm*(line&1));
+      if(x==0){
+        m.setX(m.getX()-pwm);
+      }
+      if(x==4){
+        m.setX(m.getX()+pwm);
+      }
     }
     if ((dir > 85) && (dir < 95) && digitalRead(BALL) == LOW) { //キッカーがボールに届くなら
       if (x % 4 <= 1) {//ゴールの正面にいない場合
@@ -376,14 +355,14 @@ void loop() {
           e1 = e;
         }
         while ((digitalRead(BALL) == LOW)&&((e < -5) || (e > 5))) {
-          Serial.println("spinning");
           m.move(0.0,0.0, mani);
         }
-      } else if (interval - millis() > 5000) {
+      }
+      if (interval - millis() > 5000) {
         //充電が終わっていればキッカーを動かす
-        digitalWrite(KICKER, LOW);
-        delay(5);
         digitalWrite(KICKER, HIGH);
+        delay(5);
+        digitalWrite(KICKER, LOW);
         interval = millis();
       }
     }
