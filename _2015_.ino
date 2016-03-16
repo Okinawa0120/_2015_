@@ -122,19 +122,34 @@ void timerHandler() {
 }
 
 volatile int mode = 0;
+volatile int sw = LOW;
+volatile unsigned long time_prev = 0, time_now;
+unsigned long time_chat = 200;
 void increase() {
   //ボタン入力の処理
-  mode += 1;
-  if (mode >= NOM) {
-    mode = 0;
+  time_now = millis();
+  if( time_now-time_prev > time_chat){
+    if( sw == LOW ){
+      mode -= 1;
+      if (mode < 0) {
+        mode = NOM;
+      }
+    }
   }
+    time_prev = time_now;
 }
 void decrease() {
   //ボタン入力の処理
-  mode -= 1;
-  if (mode < 0) {
-    mode = NOM;
+    time_now = millis();
+  if( time_now-time_prev > time_chat){
+    if( sw == LOW ){
+      mode += 1;
+      if (mode >= NOM) {
+        mode = 0;
+      }
+    }
   }
+    time_prev = time_now;
 }
 void startTimer() {
   //スイッチ入力でタイマー割り込みを再開させるための関数
