@@ -41,31 +41,37 @@
 #define BALL 41//ボール検出センサ
 //ピン番号以外のマクロ
 #define NOM 5 //Number Of Modesの頭文字,モードの数
-#define LPWM 130 //ラインの復帰スピード
+#define LPWM 100 //ラインの復帰スピード
 #define IMAX 16
 //------------------------------------------------
 int posiRead() {
   //超音波センサを読むマイコンからロボットがどの区分にいるかを受け取る
   int recvd = 0;
+  noInterrupts();
   digitalWrite(SSUS, LOW);
   recvd = SPI.transfer(0);//()の中の数に意味はない
   digitalWrite(SSUS, HIGH);
+  interrupts();
   return recvd;
 }
 int lineRead() {
   //ラインセンサを読むマイコンからどのラインセンサが反応してるかを受け取る
   int recvd;
+  noInterrupts();
   digitalWrite(SSLN, LOW);
   recvd = SPI.transfer(0);//()の中の数に意味はない
   digitalWrite(SSLN, HIGH);
+  interrupts();
   return recvd;
 }
 int irRead(int send) {
   //irセンサを読むマイコンから進行方向を受け取る
   int recvd;
+  noInterrupts();
   digitalWrite(SSIR, LOW);
   recvd = SPI.transfer(send);
   digitalWrite(SSIR, HIGH);
+  interrupts();
   if (recvd == 255) {
     return 360;
   }
@@ -94,10 +100,11 @@ void dribble(int judg) {
 
 int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, goal = 0, in = 0;
-double mani = 0, kd = 50, kp = 2.0, ki = 2;
+double mani = 0, kd = 50, kp = 2.2, ki = 2;
 GC5883 compass;
 int stopfg = 0; //停止フラグ
 void timerHandler() {
+  noInterrupts();
   e1 = e;
   compass.init();
   e = goal - (int)compass;
@@ -119,6 +126,7 @@ void timerHandler() {
   mani = 0.6 * kp * e + 0.5 * ki * in + 0.125 * kd * (e - e1);
   m.setYaw(mani);
   // 割り込み発生時に実行する部分
+  interrupts();
 }
 
 volatile int mode = 0;
@@ -153,7 +161,7 @@ void decrease() {
 }
 void startTimer() {
   //スイッチ入力でタイマー割り込みを再開させるための関数
-  e = (int)compass;
+  e = goal - (int)compass;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
 }
 int role; //ロボットのオフェンス,ディフェンスを表す変数
@@ -206,7 +214,7 @@ void setup() {
   digitalWrite(SSLN, HIGH);
   //方位センサの設定
   digitalWrite(KICKER, LOW);
-  delay(1000);
+  delay(3000);
   compass.init();
   front = (int)compass;
   //タイマー割り込みの設定
@@ -301,12 +309,12 @@ void loop() {
   } else {//動くとき
     int dir = irRead(role);
     if (dir == 360) {//ボールがコートから出された場合
-      if (posiRead() / 128 == 1) { //ゴール前にいるかオフェンスの時
+      if (posiRead() / 128 == 1) { //ゴール前にいる時
         m.setX(0);
         m.setY(0);//その場に止まる
       } else {
         //ゴール前に戻る
-        if (x % 4 > 1) { //正面にゴールがあれば
+        if (x % 4 > 2) { //正面にゴールがあれば
           if (role == 1) {
             m.setDir(270, 100); //後進する
           } else {
@@ -315,61 +323,66 @@ void loop() {
           }
         } else {
           if (x / 4 == 0) { //コートの右半分にいれば
-            m.setDir(180, pwm);
+            m.setDir(180, 100);
           } else {
-            m.setDir(0, pwm);
+            m.setDir(0, 100);
           }
         }
       }
     } else {
-      pwm = 130;
-      if (dir == 90) { //ボールが正面にあればドリブラーを回す
+      pwm = 165;
+      if ((dir > 75) && (dir < 105)) { //ボールが正面にあればドリブラーを回す
         dribble(0);
       } else {
         dribble(1);
       }
       if (dir == 361) {
         dir = 0;
-        pwm = 70;
+        pwm = 0;
       }
       if (dir == 362) {
         dir = 180;
-        pwm = 70;
+        pwm = 0;
       }
       m.setDir(dir, pwm);
     }
-    if (digitalRead(INTRPT) == HIGH) {
+    int line = lineRead();
+    if (line != 0) {
       Serial.print("LINE");
-      int line = lineRead();
       m.setY(LPWM * (line & 4) / 4 - LPWM * (line & 8) / 8);
       m.setX(LPWM * (line & 2) / 2 - LPWM * (line & 1));
       if (x == 0) {
       Serial.println("R");
-        m.setX(m.getX() - LPWM);
+        m.setX(- LPWM);
       }
       if (x == 4) {
         Serial.println("L");
-        m.setX(m.getX() + LPWM);
+        m.setX(LPWM);
       }
       
-      Serial.println(m.getX());
     }
-    if ((dir > 85) && (dir < 95) && digitalRead(BALL) == LOW) { //キッカーがボールに届くなら
+    if ((dir > 85) && (dir < 95) && (digitalRead(BALL) == LOW)) { //キッカーがボールに届くなら
       if (x % 4 <= 1) {//ゴールの正面にいない場合
         //x/4は左半分なら1右半分なら0
         //左半分にいるとき右に向き(+)右半分にいれば左に向く(-)
         int vari = 0;
-        if (y / 8 == 0) {
-          vari = 20 - 2 * y;
+        if (y < 8) {
+          vari = 50 - 2 * y;
         } else {
-          vari = 10 + y;
+          vari = 30 + y;
         }
-        if (x / 4 == 0) {
+        if (x > 3) {
           goal = front + vari;
+          if(goal > 180){
+            goal -= 360;
+          }
           e += vari;
           e1 = e;
         } else {
           goal = front - vari;
+          if(goal < -180){
+            goal += 360;
+          }
           e -= vari;
           e1 = e;
         }
@@ -377,7 +390,7 @@ void loop() {
           m.move(0.0, 0.0, mani);
         }
       }
-      if (interval - millis() > 5000) {
+      if (millis()-interval > 500) {
         //充電が終わっていればキッカーを動かす
         digitalWrite(KICKER, HIGH);
         delay(5);
@@ -394,6 +407,7 @@ void loop() {
       if (y == 8) { //後方に障害物があれば
         irRead(2);
         m.setDir(irRead(role), pwm); //直線移動
+        m.setY(0);
       }
     }
     if (m.getX() > 0) { //右に進んでいて
@@ -405,6 +419,9 @@ void loop() {
         m.setX(0);//x成分を削除
       }
     }
+    if((role == 1)&&(y < 8)){
+      m.setDir(270,100);
+    }
     m.move();
     if ((m.getY() == 0) && (m.getX() == 0)) {
       stopfg = 1;
@@ -412,6 +429,4 @@ void loop() {
       stopfg = 0;
     }
   }
-
-
 }
