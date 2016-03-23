@@ -390,10 +390,10 @@ void loop() {
           m.move(0.0, 0.0, mani);
         }
       }
-      if (millis()-interval > 500) {
+      if ((millis()-interval > 500)&& ((e < -5) || (e > 5))) {
         //充電が終わっていればキッカーを動かす
         digitalWrite(KICKER, HIGH);
-        delay(5);
+        delay(50);
         digitalWrite(KICKER, LOW);
         interval = millis();
       }
