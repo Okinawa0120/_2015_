@@ -1,5 +1,5 @@
+#include <JY901.h>
 #include <movement.h>//自作ライブラリ
-#include <GC5883.h>
 #include <DueTimer.h>
 #include <mymath.h>//自作ライブラリ
 #include <Wire.h>
@@ -98,16 +98,14 @@ void dribble(int judg) {
   }
 }
 
-int compassAddress = 0x42 >> 1;
 int e = 0, e1 = 0, goal = 0, in = 0;
 double mani = 0, kd = 50, kp = 2.2, ki = 2;
-GC5883 compass;
 int stopfg = 0; //停止フラグ
 void timerHandler() {
   noInterrupts();
   e1 = e;
-  compass.init();
-  e = goal - (int)compass;
+  JY901.GetAngle();
+  e = goal - (float)JY901.stcAngle.Angle[2]/32768*180;
   if (e > 180) {
     e -= 360;
   }
@@ -124,9 +122,14 @@ void timerHandler() {
     in = 0;
   }
   mani = 0.6 * kp * e + 0.5 * ki * in + 0.125 * kd * (e - e1);
+  mani *= -1;
   m.setYaw(mani);
   // 割り込み発生時に実行する部分
   interrupts();
+}
+volatile int posi;
+void timerHandler2(){
+  posi = posiRead();
 }
 
 volatile int mode = 0;
@@ -161,8 +164,10 @@ void decrease() {
 }
 void startTimer() {
   //スイッチ入力でタイマー割り込みを再開させるための関数
-  e = goal - (int)compass;
+  JY901.GetAngle();
+  e = goal - (float)JY901.stcAngle.Angle[2]/32768*180;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
+  Timer4.attachInterrupt(timerHandler2).setFrequency(10).start();
 }
 int role; //ロボットのオフェンス,ディフェンスを表す変数
 void change() {
@@ -215,10 +220,12 @@ void setup() {
   //方位センサの設定
   digitalWrite(KICKER, LOW);
   delay(3000);
-  compass.init();
-  front = (int)compass;
+  JY901.StartIIC();
+  JY901.GetAngle();
+  front = (float)JY901.stcAngle.Angle[2]/32768*180;
   //タイマー割り込みの設定
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
+  Timer4.attachInterrupt(timerHandler2).setFrequency(10).start();
   //ピン割り込みの設定
   role = digitalRead(SWL);
   attachInterrupt(BT1, increase, RISING);
@@ -235,13 +242,13 @@ void loop() {
   //変数の初期化
   double m0 = 0, m1 = 0, m2 = 0;
   int pwm = 0;//移動する速さを調整する変数
-  int y = posiRead() % 128;
-  int x = y % 8;
-  y /= 8;
+  int y = posi % 128 / 8;
+  int x = posi % 8;
   goal = front;
   if (digitalRead(SWR) == LOW) {
     //止まるとき
-    Timer3.stop();//I2C通信が中断されないようにタイマー割り込みを停止させる
+    Timer3.stop();
+    Timer4.stop();//I2C通信が中断されないようにタイマー割り込みを停止させる
     m.stop();//ロボットの動きを止める
     dribble(1);
     switch (mode) {
@@ -255,11 +262,14 @@ void loop() {
         break;
       case 1:
         //ロボットがどの区分にいるかを表示
+        posi = posiRead();
+        y = posi % 128 / 8;
+        x = posi % 8;
         lcd.clear();
         lcd.backlight();
         lcd.setCursor(2, 0);
         lcd.print("Position");
-        lcd.print(posiRead() / 128);
+        lcd.print(posi / 128);
         lcd.setCursor(3, 1);
         lcd.print("x:");
         lcd.print(x);
@@ -274,7 +284,7 @@ void loop() {
         lcd.setCursor(2, 0);
         lcd.print("Compass");
         lcd.setCursor(3, 1);
-        lcd.print(e);//偏差
+        lcd.print((float)JY901.stcAngle.Angle[2]/32768*180);//偏差
         lcd.print("deg");
         lcd.print(front);//基準
         lcd.print("deg");
@@ -309,7 +319,7 @@ void loop() {
   } else {//動くとき
     int dir = irRead(role);
     if (dir == 360) {//ボールがコートから出された場合
-      if (posiRead() / 128 == 1) { //ゴール前にいる時
+      if (posi / 128 == 1) { //ゴール前にいる時
         m.setX(0);
         m.setY(0);//その場に止まる
       } else {
@@ -390,10 +400,10 @@ void loop() {
           m.move(0.0, 0.0, mani);
         }
       }
-      if ((millis()-interval > 500)&& ((e < -5) || (e > 5))) {
+      if (millis()-interval > 500) {
         //充電が終わっていればキッカーを動かす
         digitalWrite(KICKER, HIGH);
-        delay(50);
+        delay(25);
         digitalWrite(KICKER, LOW);
         interval = millis();
       }
