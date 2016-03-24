@@ -97,7 +97,17 @@ void dribble(int judg) {
     digitalWrite(INBD, LOW);
   }
 }
-
+void calibration() {
+  JY901.WriteWord(CALSW, 1);
+  m.move(0.0, 0.0, 40);
+  delay(3000);
+  JY901.WriteWord(CALSW, 0);
+  JY901.WriteWord(CALSW, 2);
+  m.move(0.0, 0.0, 40);
+  delay(3000);
+  JY901.WriteWord(CALSW, 0);
+  JY901.WriteWord(SAVE, 0);
+}
 int e = 0, e1 = 0, goal = 0, in = 0;
 double mani = 0, kd = 50, kp = 2.2, ki = 2;
 int stopfg = 0; //停止フラグ
@@ -105,7 +115,7 @@ void timerHandler() {
   noInterrupts();
   e1 = e;
   JY901.GetAngle();
-  e = goal - (float)JY901.stcAngle.Angle[2]/32768*180;
+  e = goal - (float)JY901.stcAngle.Angle[2] / 32768 * 180;
   if (e > 180) {
     e -= 360;
   }
@@ -128,7 +138,7 @@ void timerHandler() {
   interrupts();
 }
 volatile int posi;
-void timerHandler2(){
+void timerHandler2() {
   posi = posiRead();
 }
 
@@ -139,33 +149,33 @@ unsigned long time_chat = 200;
 void increase() {
   //ボタン入力の処理
   time_now = millis();
-  if( time_now-time_prev > time_chat){
-    if( sw == LOW ){
+  if ( time_now - time_prev > time_chat) {
+    if ( sw == LOW ) {
       mode -= 1;
       if (mode < 0) {
         mode = NOM;
       }
     }
   }
-    time_prev = time_now;
+  time_prev = time_now;
 }
 void decrease() {
   //ボタン入力の処理
-    time_now = millis();
-  if( time_now-time_prev > time_chat){
-    if( sw == LOW ){
+  time_now = millis();
+  if ( time_now - time_prev > time_chat) {
+    if ( sw == LOW ) {
       mode += 1;
       if (mode >= NOM) {
         mode = 0;
       }
     }
   }
-    time_prev = time_now;
+  time_prev = time_now;
 }
 void startTimer() {
   //スイッチ入力でタイマー割り込みを再開させるための関数
   JY901.GetAngle();
-  e = goal - (float)JY901.stcAngle.Angle[2]/32768*180;
+  e = goal - (float)JY901.stcAngle.Angle[2] / 32768 * 180;
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
   Timer4.attachInterrupt(timerHandler2).setFrequency(10).start();
 }
@@ -222,7 +232,7 @@ void setup() {
   delay(3000);
   JY901.StartIIC();
   JY901.GetAngle();
-  front = (float)JY901.stcAngle.Angle[2]/32768*180;
+  front = (float)JY901.stcAngle.Angle[2] / 32768 * 180;
   //タイマー割り込みの設定
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
   Timer4.attachInterrupt(timerHandler2).setFrequency(10).start();
@@ -284,10 +294,18 @@ void loop() {
         lcd.setCursor(2, 0);
         lcd.print("Compass");
         lcd.setCursor(3, 1);
-        lcd.print((float)JY901.stcAngle.Angle[2]/32768*180);//偏差
+        lcd.print((float)JY901.stcAngle.Angle[2] / 32768 * 180); //偏差
         lcd.print("deg");
         lcd.print(front);//基準
         lcd.print("deg");
+        if (digitalRead(BT2) == HIGH) {
+          if (role == 0) {
+            calibration();
+          } else {
+            JY901.GetAngle();
+            front = (float)JY901.stcAngle.Angle[2] / 32768 * 180;
+          }
+        }
         break;
       case 3:
         //irセンサを読むマイコンから送られてくる進行方向を表示
@@ -333,9 +351,9 @@ void loop() {
           }
         } else {
           if (x / 4 == 0) { //コートの右半分にいれば
-            m.setDir(180, 100);
+            m.setDir(180, (3 - x % 4) * 25);
           } else {
-            m.setDir(0, 100);
+            m.setDir(0, (3 - x % 4) * 25);
           }
         }
       }
@@ -356,20 +374,23 @@ void loop() {
       }
       m.setDir(dir, pwm);
     }
+    if ((role == 1) && (y < 8)) {
+      m.setDir(270, 100);
+    }
     int line = lineRead();
     if (line != 0) {
       Serial.print("LINE");
       m.setY(LPWM * (line & 4) / 4 - LPWM * (line & 8) / 8);
       m.setX(LPWM * (line & 2) / 2 - LPWM * (line & 1));
       if (x == 0) {
-      Serial.println("R");
+        Serial.println("R");
         m.setX(- LPWM);
       }
       if (x == 4) {
         Serial.println("L");
         m.setX(LPWM);
       }
-      
+
     }
     if ((dir > 85) && (dir < 95) && (digitalRead(BALL) == LOW)) { //キッカーがボールに届くなら
       if (x % 4 <= 1) {//ゴールの正面にいない場合
@@ -381,16 +402,16 @@ void loop() {
         } else {
           vari = 30 + y;
         }
-        if (x > 3) {
+        if (x < 4) {
           goal = front + vari;
-          if(goal > 180){
+          if (goal > 180) {
             goal -= 360;
           }
           e += vari;
           e1 = e;
         } else {
           goal = front - vari;
-          if(goal < -180){
+          if (goal < -180) {
             goal += 360;
           }
           e -= vari;
@@ -400,7 +421,7 @@ void loop() {
           m.move(0.0, 0.0, mani);
         }
       }
-      if (millis()-interval > 500) {
+      if (millis() - interval > 500) {
         //充電が終わっていればキッカーを動かす
         digitalWrite(KICKER, HIGH);
         delay(25);
@@ -428,9 +449,6 @@ void loop() {
       if (x == 4) { //左端にいれば
         m.setX(0);//x成分を削除
       }
-    }
-    if((role == 1)&&(y < 8)){
-      m.setDir(270,100);
     }
     m.move();
     if ((m.getY() == 0) && (m.getX() == 0)) {
