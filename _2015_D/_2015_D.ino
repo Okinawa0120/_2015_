@@ -185,7 +185,7 @@ void startTimer() {
   Timer3.attachInterrupt(timerHandler).setFrequency(60).start();
   Timer4.attachInterrupt(timerHandler2).setFrequency(10).start();
 }
-int role = 0; //ロボットのオフェンス,ディフェンスを表す変数
+int role = 1; //ロボットのオフェンス,ディフェンスを表す変数
 //void change() {
 //  if (digitalRead(SWL) == LOW) {
 //    role = 0;//オフェンス
@@ -366,7 +366,7 @@ void loop() {
         }
       }
     } else {
-      pwm = 150;
+      pwm = 140;
       if ((dir > 75) && (dir < 105)) { //ボールが正面にあればドリブラーを回す
         dribble(0);
       } else {
@@ -386,6 +386,32 @@ void loop() {
       m.setDir(270, 100);
     }
     
+    int line = lineRead();
+    if (line != 0) {
+      digitalWrite(LED1, line & 1);
+      digitalWrite(LED3, (line & 2)/2);
+      Serial.print("LINE");
+      m.setY(LPWM * (line & 4) / 4 - LPWM * (line & 8) / 8);
+      m.setX(LPWM * (line & 2) / 2 - LPWM * (line & 1));
+      if (x == 0) {
+        Serial.println("R");
+        m.setX(- LPWM);
+      }
+      if (x == 4) {
+        Serial.println("L");
+        m.setX(LPWM);
+      }
+//      if((y == 0)&&(line != 4)){
+//        m.setDir(270,100);
+//      }
+//      if((y == 8)&&(line != 8)){
+//        m.setDir(90,100);
+//      }
+    }else{
+      digitalWrite(LED1, LOW);
+      digitalWrite(LED2, LOW);
+      digitalWrite(LED3, LOW);
+    }
     if ((dir > 85) && (dir < 95) && (digitalRead(BALL) == LOW)) { //キッカーがボールに届くなら
       if (x % 4 <= 1) {//ゴールの正面にいない場合
         //x/4は左半分なら1右半分なら0
@@ -443,32 +469,6 @@ void loop() {
       if (x == 4) { //左端にいれば
         m.setX(0);//x成分を削除
       }
-    }
-    int line = lineRead();
-    if (line != 0) {
-      digitalWrite(LED1, line & 1);
-      digitalWrite(LED3, (line & 2)/2);
-      Serial.print("LINE");
-      m.setY(LPWM * (line & 4) / 4 - LPWM * (line & 8) / 8);
-      m.setX(LPWM * (line & 2) / 2 - LPWM * (line & 1));
-      if (x == 0) {
-        Serial.println("R");
-        m.setX(- LPWM);
-      }
-      if (x == 4) {
-        Serial.println("L");
-        m.setX(LPWM);
-      }
-//      if((y == 0)&&(line != 4)){
-//        m.setDir(270,100);
-//      }
-//      if((y == 8)&&(line != 8)){
-//        m.setDir(90,100);
-//      }
-    }else{
-      digitalWrite(LED1, LOW);
-      digitalWrite(LED2, LOW);
-      digitalWrite(LED3, LOW);
     }
     m.move();
     if ((m.getY() == 0) && (m.getX() == 0)) {
